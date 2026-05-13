@@ -88,7 +88,7 @@ Notes: {model['metadata']['notes']}
 formatted_data = []
 for item in file:
     try : 
-        formatted_data.append(item)
+        formatted_data.append(format_prompt(item))
     except: 
         print(f"error in {item}")
 
