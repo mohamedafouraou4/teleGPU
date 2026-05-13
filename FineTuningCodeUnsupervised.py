@@ -85,8 +85,8 @@ formatted_data = []
 for item in file:
     try:
         formatted_data.append(format_prompt(item))
-    except :
-        print(f"error in {item}")
+    except Exception as e:
+        print(f"error in {item}: {e}")
 
 dataset = Dataset.from_dict({"text": formatted_data})
 
@@ -123,6 +123,61 @@ data_collator = DataCollatorForLanguageModeling(
 # Clear cache right before trainer init
 torch.cuda.empty_cache()
 gc.collect()
+
+# ── Patch: bypass Unsloth/TRL dataset probing that crashes on text-only datasets ──
+# Unsloth's compiled trainer probes the dataset in two ways on __init__:
+#   - line 897:  next(iter(dataset))          → fine, Dataset supports this
+#   - line 1166: dataset[field][0]            → KeyError: 0 (dict-style access on a str)
+# The TRL base also probes dataset_text_field. Both are patched below.
+
+from trl.trainer.sft_trainer import SFTTrainer as _TRLSFTTrainer
+
+_original_prepare = _TRLSFTTrainer._prepare_dataset
+
+def _patched_prepare_dataset(self, dataset, tokenizer, packing, dataset_text_field, *args, **kwargs):
+    if dataset_text_field and dataset_text_field in dataset.column_names:
+        sample = dataset[dataset_text_field]
+        if sample and not isinstance(sample[0], str):
+            raise ValueError(
+                f"Column '{dataset_text_field}' contains {type(sample[0])} instead of str. "
+                "Check your format_prompt function is appending strings."
+            )
+    return _original_prepare(self, dataset, tokenizer, packing, dataset_text_field, *args, **kwargs)
+
+_TRLSFTTrainer._prepare_dataset = _patched_prepare_dataset
+
+# Patch Unsloth's own __init__ which wraps TRL's and adds its own dataset probe
+import unsloth.trainer as _unsloth_trainer
+_orig_unsloth_init = _unsloth_trainer.SFTTrainer.__init__
+
+def _patched_unsloth_init(self, *args, **kwargs):
+    if "train_dataset" in kwargs:
+        _ds = kwargs["train_dataset"]
+
+        class _ProbeSafeDataset:
+            def __iter__(self):
+                return iter(_ds)
+            def __len__(self):
+                return len(_ds)
+            def __getitem__(self, key):
+                return _ds[key]
+            @property
+            def column_names(self):
+                return _ds.column_names
+            @property
+            def features(self):
+                return _ds.features
+            def map(self, *a, **kw):
+                return _ds.map(*a, **kw)
+            def select(self, *a, **kw):
+                return _ds.select(*a, **kw)
+
+        kwargs["train_dataset"] = _ProbeSafeDataset()
+
+    _orig_unsloth_init(self, *args, **kwargs)
+
+_unsloth_trainer.SFTTrainer.__init__ = _patched_unsloth_init
+# ─────────────────────────────────────────────────────────────────────────────
 
 trainer = SFTTrainer(
     model=model,
