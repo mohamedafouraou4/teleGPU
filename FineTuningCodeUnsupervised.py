@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!usr/bin/env python
 # coding: utf-8
 
 # <h1>
@@ -19,7 +19,7 @@ print(file[1])
 # In[2]:
 
 
-get_ipython().system('pip install unsloth trl peft accelerate bitsandbytes')
+#get_ipython().system('pip install unsloth trl peft accelerate bitsandbytes')
 
 
 # In[ ]:
@@ -77,11 +77,21 @@ Transitions: {' | '.join(f"{t['from']} --[{', '.join(t['joint'])}]--> {t['to']}"
 Initial state: {inp['initial_state']}
 Labeling: {' | '.join(f"{s}: {', '.join(labels)}" for s, labels in inp['labeling'].items())}
 Coalition: {', '.join(inp['coalition'])}
-Formula: {inp['formula_atl']}
+Formula: {inp['formula_ATL']}
 Notes: {model['metadata']['notes']}
 """
 
-formatted_data = [format_prompt(item) for item in file]
+#try:
+ #   formatted_data = [format_prompt(item) for item in file]
+#except:
+#    print(f"error in {item}")
+formatted_data = []
+for item in file:
+    try : 
+        formatted_data.append(item)
+    except: 
+        print(f"error in {item}")
+
 dataset = Dataset.from_dict({"text": formatted_data})
 
 
@@ -207,4 +217,3 @@ outputs = model.generate(
 # Decode and print
 response = tokenizer.batch_decode(outputs)[0]
 print(response)
-
