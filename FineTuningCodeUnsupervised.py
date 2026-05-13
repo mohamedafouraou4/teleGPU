@@ -42,14 +42,14 @@ os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
 
 from unsloth import FastLanguageModel
-import torch,gc
+import torch, gc
 
 torch.cuda.empty_cache()
 gc.collect()
 
 model_name = "unsloth/Qwen3-4B"
 
-max_seq_length = 2048  # Choose sequence length
+max_seq_length = 512  # ← was 2048; biggest single memory saving (attention is O(n²))
 dtype = None
 
 # Load model and tokenizer
@@ -77,20 +77,16 @@ Transitions: {' | '.join(f"{t['from']} --[{', '.join(t['joint'])}]--> {t['to']}"
 Initial state: {inp['initial_state']}
 Labeling: {' | '.join(f"{s}: {', '.join(labels)}" for s, labels in inp['labeling'].items())}
 Coalition: {', '.join(inp['coalition'])}
-Formula: {inp['formula_ATL']}
+Formula: {inp['formula_atl']}
 Notes: {model['metadata']['notes']}
 """
 
-#try:
- #   formatted_data = [format_prompt(item) for item in file]
-#except:
-#    print(f"error in {item}")
 formatted_data = []
 for item in file:
-    try : 
+    try:
         formatted_data.append(format_prompt(item))
-    except: 
-        print(f"error in {item}")
+    except Exception as e:
+        print(f"error in {item}: {e}")
 
 dataset = Dataset.from_dict({"text": formatted_data})
 
@@ -98,12 +94,12 @@ dataset = Dataset.from_dict({"text": formatted_data})
 # In[ ]:
 
 
-# Add LoRA adapters ??hidden parameters??
+# Add LoRA adapters
 model = FastLanguageModel.get_peft_model(
     model,
-    r=8,
-    target_modules=["q_proj", "v_proj"],  # reduce from 7 to 2 modules
-    lora_alpha=16,                         # should be 2x rank, not 128
+    r=4,               # ← was 8; halves adapter memory
+    target_modules=["q_proj", "v_proj"],
+    lora_alpha=8,      # ← was 16; keep 2x rank
     lora_dropout=0,
     bias="none",
     use_gradient_checkpointing="unsloth",
@@ -121,8 +117,12 @@ from transformers import TrainingArguments, DataCollatorForLanguageModeling
 
 data_collator = DataCollatorForLanguageModeling(
     tokenizer=tokenizer,
-    mlm=False # mlm is set off to perform an inference of gpt style, ie we try to predict the next word?
+    mlm=False  # mlm off → causal LM / predict next token
 )
+
+# Clear cache right before trainer init
+torch.cuda.empty_cache()
+gc.collect()
 
 trainer = SFTTrainer(
     model=model,
@@ -133,13 +133,13 @@ trainer = SFTTrainer(
     data_collator=data_collator,
     dataset_num_proc=2,
     args=TrainingArguments(
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=4,
+        per_device_train_batch_size=1,      # ← was 2; halves activation memory
+        gradient_accumulation_steps=8,      # ← was 4; keeps effective batch size = 8
         warmup_steps=10,
         num_train_epochs=3,
         learning_rate=2e-4,
-        fp16=not torch.cuda.is_bf16_supported(),
-        bf16=torch.cuda.is_bf16_supported(),
+        fp16=True,                          # ← hard-coded; P100 has no bfloat16
+        bf16=False,                         # ← hard-coded off
         logging_steps=25,
         optim="adamw_8bit",
         weight_decay=0.01,
@@ -149,6 +149,8 @@ trainer = SFTTrainer(
         save_strategy="epoch",
         save_total_limit=2,
         dataloader_pin_memory=False,
+        dataloader_num_workers=0,           # ← added; kills extra worker memory copies
+        gradient_checkpointing=True,        # ← added; trades recompute for ~30% memory saving
         report_to="none",
     ),
 )
