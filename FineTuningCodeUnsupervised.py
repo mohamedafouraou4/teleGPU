@@ -85,8 +85,8 @@ formatted_data = []
 for item in file:
     try:
         formatted_data.append(format_prompt(item))
-    except Exception as e:
-        print(f"error in {item}: {e}")
+    except :
+        print(f"error in {item}")
 
 dataset = Dataset.from_dict({"text": formatted_data})
 
