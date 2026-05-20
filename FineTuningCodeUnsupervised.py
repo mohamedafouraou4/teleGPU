@@ -7,9 +7,6 @@ file = json.load(open("dataset_augmented.json", "r"))
 print(file[1])
 
 # pip install unsloth trl peft accelerate bitsandbytes
-# (uncomment if needed)
-# import subprocess
-# subprocess.run(["pip", "install", "unsloth", "trl", "peft", "accelerate", "bitsandbytes"])
 
 # ── GPU check ─────────────────────────────────────────────────────────────────
 import torch
@@ -43,16 +40,19 @@ from datasets import Dataset
 
 def format_prompt(item):
     inp = item['input']
+    actions_str = ' | '.join(a + ': ' + ', '.join(acts) for a, acts in inp['actions'].items())
+    transitions_str = ' | '.join(t['from'] + ' --[' + ', '.join(t['joint']) + ']--> ' + t['to'] for t in inp['transitions'])
+    labeling_str = ' | '.join(s + ': ' + ', '.join(labels) for s, labels in inp['labeling'].items())
     return (
-        f"States: {', '.join(inp['states'])}\n"
-        f"Agents: {', '.join(inp['agents'])}\n"
-        f"Actions: {' | '.join(f'{a}: {chr(44).join(acts)}' for a, acts in inp['actions'].items())}\n"
-        f"Transitions: {' | '.join(f\"{t['from']} --[{', '.join(t['joint'])}]--> {t['to']}\" for t in inp['transitions'])}\n"
-        f"Initial state: {inp['initial_state']}\n"
-        f"Labeling: {' | '.join(f\"{s}: {', '.join(labels)}\" for s, labels in inp['labeling'].items())}\n"
-        f"Coalition: {', '.join(inp['coalition'])}\n"
-        f"Formula: {inp['formula_atl']}\n"
-        f"Notes: {item['metadata']['notes']}\n"
+        'States: ' + ', '.join(inp['states']) + '\n'
+        'Agents: ' + ', '.join(inp['agents']) + '\n'
+        'Actions: ' + actions_str + '\n'
+        'Transitions: ' + transitions_str + '\n'
+        'Initial state: ' + inp['initial_state'] + '\n'
+        'Labeling: ' + labeling_str + '\n'
+        'Coalition: ' + ', '.join(inp['coalition']) + '\n'
+        'Formula: ' + inp['formula_atl'] + '\n'
+        'Notes: ' + item['metadata']['notes'] + '\n'
     )
 
 formatted_data = []
@@ -62,9 +62,9 @@ for item in file:
         if isinstance(text, str) and text.strip():
             formatted_data.append(text)
     except Exception as e:
-        print(f"Skipping item due to error: {e}")
+        print('Skipping item due to error: ' + str(e))
 
-print(f"Total valid samples: {len(formatted_data)}")
+print('Total valid samples: ' + str(len(formatted_data)))
 
 dataset = Dataset.from_dict({"text": formatted_data})
 
@@ -111,7 +111,7 @@ from transformers import TrainingArguments, DataCollatorForLanguageModeling
 
 data_collator = DataCollatorForLanguageModeling(
     tokenizer=tokenizer,
-    mlm=False,  # causal LM — predict next token
+    mlm=False,
 )
 
 torch.cuda.empty_cache()
@@ -121,17 +121,16 @@ trainer = SFTTrainer(
     model=model,
     tokenizer=tokenizer,
     train_dataset=tokenized_dataset,
-    # dataset_text_field intentionally omitted — dataset is pre-tokenized
     max_seq_length=max_seq_length,
     data_collator=data_collator,
     dataset_num_proc=2,
     args=TrainingArguments(
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=8,   # effective batch size = 8
+        gradient_accumulation_steps=8,
         warmup_steps=10,
         num_train_epochs=3,
         learning_rate=2e-4,
-        fp16=True,                        # P100 has no bfloat16
+        fp16=True,
         bf16=False,
         logging_steps=25,
         optim="adamw_8bit",
@@ -171,6 +170,21 @@ test_input = {
     "formula_ATL": "<h> X locked",
 }
 
+actions_str  = ' | '.join(a + ': ' + ', '.join(acts) for a, acts in test_input['actions'].items())
+trans_str    = ' | '.join(t['from'] + ' --[' + ', '.join(t['joint']) + ']--> ' + t['to'] for t in test_input['transitions'])
+labeling_str = ' | '.join(s + ': ' + ', '.join(labels) for s, labels in test_input['labeling'].items())
+
+user_content = (
+    'States: '       + ', '.join(test_input['states'])    + '\n'
+    'Agents: '       + ', '.join(test_input['agents'])    + '\n'
+    'Actions: '      + actions_str                        + '\n'
+    'Transitions: '  + trans_str                          + '\n'
+    'Initial state: '+ test_input['initial_state']        + '\n'
+    'Labeling: '     + labeling_str                       + '\n'
+    'Coalition: '    + ', '.join(test_input['coalition']) + '\n'
+    'Formula: '      + test_input['formula_ATL']
+)
+
 messages = [
     {
         "role": "system",
@@ -178,16 +192,7 @@ messages = [
     },
     {
         "role": "user",
-        "content": (
-            f"States: {', '.join(test_input['states'])}\n"
-            f"Agents: {', '.join(test_input['agents'])}\n"
-            f"Actions: {' | '.join(f\"{a}: {', '.join(acts)}\" for a, acts in test_input['actions'].items())}\n"
-            f"Transitions: {' | '.join(f\"{t['from']} --[{', '.join(t['joint'])}]--> {t['to']}\" for t in test_input['transitions'])}\n"
-            f"Initial state: {test_input['initial_state']}\n"
-            f"Labeling: {' | '.join(f\"{s}: {', '.join(labels)}\" for s, labels in test_input['labeling'].items())}\n"
-            f"Coalition: {', '.join(test_input['coalition'])}\n"
-            f"Formula: {test_input['formula_ATL']}"
-        ),
+        "content": user_content,
     },
 ]
 
