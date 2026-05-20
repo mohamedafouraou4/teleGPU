@@ -51,7 +51,7 @@ def format_prompt(item):
         'Initial state: ' + inp['initial_state'] + '\n'
         'Labeling: ' + labeling_str + '\n'
         'Coalition: ' + ', '.join(inp['coalition']) + '\n'
-        'Formula: ' + inp['formula_atl'] + '\n'
+        'Formula: ' + inp['formula_ATL'] + '\n'
         'Notes: ' + item['metadata']['notes'] + '\n'
     )
 
