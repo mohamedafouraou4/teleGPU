@@ -71,18 +71,26 @@ print(f"Loaded {len(file)} examples. Sample:\n{file[1]}\n")
 
 def format_prompt(item):
     inp = item["input"]
+    actions_str = " | ".join(
+        f"{a}: {', '.join(acts)}" for a, acts in inp["actions"].items()
+    )
+    transitions_str = " | ".join(
+        f"{t['from']} --[{', '.join(t['joint'])}]--> {t['to']}" for t in inp["transitions"]
+    )
+    labeling_str = " | ".join(
+        f"{s}: {', '.join(labels)}" for s, labels in inp["labeling"].items()
+    )
     return (
         f"States: {', '.join(inp['states'])}\n"
         f"Agents: {', '.join(inp['agents'])}\n"
-        f"Actions: {' | '.join(f'{a}: {chr(44).join(acts)}' for a, acts in inp['actions'].items())}\n"
-        f"Transitions: {' | '.join(f\"{t['from']} --[{', '.join(t['joint'])}]--> {t['to']}\" for t in inp['transitions'])}\n"
+        f"Actions: {actions_str}\n"
+        f"Transitions: {transitions_str}\n"
         f"Initial state: {inp['initial_state']}\n"
-        f"Labeling: {' | '.join(f\"{s}: {', '.join(labels)}\" for s, labels in inp['labeling'].items())}\n"
+        f"Labeling: {labeling_str}\n"
         f"Coalition: {', '.join(inp['coalition'])}\n"
         f"Formula: {inp['formula_ATL']}\n"
         f"Notes: {item['metadata']['notes']}\n"
     )
-
 
 formatted_data = []
 for i, item in enumerate(file):
