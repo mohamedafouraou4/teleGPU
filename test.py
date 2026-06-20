@@ -1,10 +1,4 @@
-!pip install -q --no-cache-dir --upgrade \
-  transformers \
-  peft \
-  trl \
-  bitsandbytes \
-  accelerate \
-  datasets
+
 
 import torch
 import transformers
