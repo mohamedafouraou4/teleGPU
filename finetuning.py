@@ -25,7 +25,7 @@ import argparse
 # ── Parse args ────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
 parser.add_argument("--resume", action="store_true", help="Resume from last checkpoint in outputs/")
-parser.add_argument("--dataset", default="dataset_augmented.json", help="Path to dataset JSON")
+parser.add_argument("--dataset", default="dataset_augmented_with_false_formulas.json", help="Path to dataset JSON")
 parser.add_argument("--output-dir", default="outputs", help="Where to save checkpoints and final model")
 args = parser.parse_args()
 
