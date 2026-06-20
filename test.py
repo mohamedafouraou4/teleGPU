@@ -20,7 +20,7 @@ from datasets import Dataset
 import trl
 from trl.trainer.sft_trainer import SFTTrainer
 from trl import SFTConfig
-from google.colab import drive
+#from google.colab import drive
 import shutil
 
 with open("dataset_augmented_with_false_formulas.json", "r") as f:
